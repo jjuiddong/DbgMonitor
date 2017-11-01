@@ -19,15 +19,18 @@ int main()
 	};
 	sSharedData *sharedData = (sSharedData*)shmem.m_memPtr;
 
+	cMutex mutex("DbgMutex");
+
 	float phase = 0;
 	while (1)
 	{
-		while ((1 == sharedData->state) || (3 == sharedData->state))
-			Sleep(1);
-
+		//while ((1 == sharedData->state) || (3 == sharedData->state))
+		//	Sleep(1);
+		mutex.Lock();
 		sharedData->state = 1;
 		sharedData->dtVal = cos(phase);
 		sharedData->state = 2;
+		mutex.Unlock();
 
 		phase += 0.1f;
 		cout << "write " << phase << endl;

@@ -45,7 +45,8 @@ class cDockView1 : public framework::cDockWindow
 {
 public:
 	cDockView1(const string &name) : framework::cDockWindow(name)
-	, m_incT(0) {
+	, m_incT(0) 
+	, m_mutex("DbgMutex") {
 	}
 	virtual ~cDockView1() {
 	}
@@ -88,10 +89,12 @@ public:
 			//if (m_incT > 0.033f) // 30 hz
 			{
 				// 누군가가 공유메모리에 쓰고 있다면, 다 쓸때까지 대기한다.
-				while (1 == g_sharedData->state)
-					Sleep(1);
+				//while (1 == g_sharedData->state)
+				//	Sleep(1);
 
+				m_mutex.Lock();
 				const double val = g_sharedData->dtVal;
+				m_mutex.Unlock();
 				m_incVal += val;
 
 				m_incT = 0;
@@ -154,6 +157,7 @@ public:
 
 	float m_incT = 0;
 	double m_incVal = 0;
+	cMutex m_mutex;
 	graphic::cRenderTarget m_renderTarget;
 };
 

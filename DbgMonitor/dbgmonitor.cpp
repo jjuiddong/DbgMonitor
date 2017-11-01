@@ -100,11 +100,15 @@ public:
 			}
 		}
 
+		ImGui::Spacing();
+		ImGui::Text("Increase Seconds");
 		ImGui::PlotLines("incT", values1, IM_ARRAYSIZE(values1), values_offset, ""
-			, 0.0f, 1.2f, ImVec2(0, 300));
-
+			, 0.0f, 1.2f, ImVec2(0, 250));
+		
+		ImGui::Spacing();
+		ImGui::Text("Delta Seconds");
 		ImGui::PlotLines("dt", values2, IM_ARRAYSIZE(values2), values_offset, ""
-			, 0.0f, 1.2f, ImVec2(0, 300));
+			, 0.0f, 1.2f, ImVec2(0, 250));
 	}
 
 	virtual void OnPreRender(const float deltaSeconds) override {

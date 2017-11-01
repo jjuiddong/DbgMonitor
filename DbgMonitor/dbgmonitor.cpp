@@ -9,6 +9,7 @@ using namespace framework;
 
 struct sSharedData 
 {
+	int state; // 0:readable,writable , 1:write, 2:write-end, 3:read
 	double dtVal;
 	char dummy[256];
 };
@@ -71,7 +72,6 @@ public:
 	}
 
 	virtual void OnRender(const float deltaSeconds) override {
-#define IM_ARRAYSIZE(_ARR)  ((int)(sizeof(_ARR)/sizeof(*_ARR)))
 
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
@@ -85,15 +85,19 @@ public:
 		static int values_offset = 0;
 		if (animate)
 		{
-			if (m_incT > 0.033f) // 30 hz
+			//if (m_incT > 0.033f) // 30 hz
 			{
+				// 누군가가 공유메모리에 쓰고 있다면, 다 쓸때까지 대기한다.
+				while (1 == g_sharedData->state)
+					Sleep(1);
+
 				const double val = g_sharedData->dtVal;
 				m_incVal += val;
 
 				m_incT = 0;
 				values1[values_offset] = (float)m_incVal;
 				values2[values_offset] = (float)val;
-				values_offset = (values_offset + 1) % IM_ARRAYSIZE(values1);
+				values_offset = (values_offset + 1) % ARRAYSIZE(values1);
 
 				if (m_incVal > 1.0f)
 					m_incVal = 0.f;
@@ -102,13 +106,19 @@ public:
 
 		ImGui::Spacing();
 		ImGui::Text("Increase Seconds");
-		ImGui::PlotLines("incT", values1, IM_ARRAYSIZE(values1), values_offset, ""
-			, 0.0f, 1.2f, ImVec2(0, 250));
+		ImGui::SameLine();
+		static float graph1MinMax[2] = { 0.f, 1.2f };
+		ImGui::DragFloat2("Graph1 Min-Max", graph1MinMax, 0.01f);
+		ImGui::PlotLines("incT", values1, ARRAYSIZE(values1), values_offset, ""
+			, graph1MinMax[0], graph1MinMax[1], ImVec2(0, 250));
 		
 		ImGui::Spacing();
 		ImGui::Text("Delta Seconds");
-		ImGui::PlotLines("dt", values2, IM_ARRAYSIZE(values2), values_offset, ""
-			, 0.0f, 1.2f, ImVec2(0, 250));
+		ImGui::SameLine();
+		static float graph2MinMax[2] = { -1.2f, 1.2f };
+		ImGui::DragFloat2("Graph2 Min-Max", graph2MinMax, 0.01f);
+		ImGui::PlotLines("dt", values2, ARRAYSIZE(values2), values_offset, ""
+			, graph2MinMax[0], graph2MinMax[1], ImVec2(0, 250));
 	}
 
 	virtual void OnPreRender(const float deltaSeconds) override {

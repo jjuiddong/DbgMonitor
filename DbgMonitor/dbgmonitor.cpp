@@ -7,6 +7,15 @@
 using namespace graphic;
 using namespace framework;
 
+struct sSharedData 
+{
+	double dtVal;
+	char dummy[256];
+};
+sSharedData *g_sharedData = NULL;
+cShmmem m_dbgShmem;
+
+
 class cViewer : public framework::cGameMain2
 {
 public:
@@ -20,16 +29,6 @@ public:
 
 
 public:
-	cCamera m_terrainCamera;
-	cGrid m_ground;
-	cDbgArrow m_dbgArrow;
-	cDbgAxis m_axis;
-	cTexture m_texture;
-
-	Transform m_world;
-	cMaterial m_mtrl;
-
-	bool m_isFrustumTracking = true;
 	sf::Vector2i m_curPos;
 	Plane m_groundPlane1, m_groundPlane2;
 	float m_moveLen;
@@ -44,22 +43,79 @@ INIT_FRAMEWORK3(cViewer);
 class cDockView1 : public framework::cDockWindow
 {
 public:
-	cDockView1(const string &name) : framework::cDockWindow(name) {
+	cDockView1(const string &name) : framework::cDockWindow(name)
+	, m_incT(0) {
 	}
 	virtual ~cDockView1() {
 	}
 
-	bool Init() {
+	bool Init(cRenderer &renderer) {
+
+		m_camera.SetCamera(Vector3(-10,10,-10), Vector3(0,0,0), Vector3(0,1,0));
+		m_camera.SetProjection(MATH_PI / 4.f, m_rect.Width() / m_rect.Height(), 1, 10000.f);
+		m_camera.SetViewPort(m_rect.Width(), m_rect.Height());
+
+		sf::Vector2u size((u_int)m_rect.Width() - 15, (u_int)m_rect.Height() - 50);
+		cViewport vp = renderer.m_viewPort;
+		vp.m_vp.Width = (float)size.x;
+		vp.m_vp.Height = (float)size.y;
+		m_renderTarget.Create(renderer, vp, DXGI_FORMAT_R8G8B8A8_UNORM, true, true
+			, DXGI_FORMAT_D24_UNORM_S8_UINT);
+
+
 		return true;
 	}
+	
 	virtual void OnUpdate(const float deltaSeconds) override {
 
 	}
+
 	virtual void OnRender(const float deltaSeconds) override {
+#define IM_ARRAYSIZE(_ARR)  ((int)(sizeof(_ARR)/sizeof(*_ARR)))
 
+		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+
+		m_incT += deltaSeconds;
+	 
+		static bool animate = true;
+		ImGui::Checkbox("animate", &animate);
+
+		static float values1[1024] = { 0 };
+		static float values2[1024] = { 0 };
+		static int values_offset = 0;
+		if (animate)
+		{
+			if (m_incT > 0.033f) // 30 hz
+			{
+				const double val = g_sharedData->dtVal;
+				m_incVal += val;
+
+				m_incT = 0;
+				values1[values_offset] = (float)m_incVal;
+				values2[values_offset] = (float)val;
+				values_offset = (values_offset + 1) % IM_ARRAYSIZE(values1);
+
+				if (m_incVal > 1.0f)
+					m_incVal = 0.f;
+			}
+		}
+
+		ImGui::PlotLines("incT", values1, IM_ARRAYSIZE(values1), values_offset, ""
+			, 0.0f, 1.2f, ImVec2(0, 300));
+
+		ImGui::PlotLines("dt", values2, IM_ARRAYSIZE(values2), values_offset, ""
+			, 0.0f, 1.2f, ImVec2(0, 300));
 	}
-	virtual void OnPreRender(const float deltaSeconds) override {
 
+	virtual void OnPreRender(const float deltaSeconds) override {
+		//cAutoCam cam(&m_camera);
+		//cRenderer &renderer = GetRenderer();
+		//if (m_renderTarget.Begin(renderer))
+		//{
+		//	//RenderScene(renderer, deltaSeconds, "ShadowMap", m_isShadow, parentTm);
+		//	renderer.RenderAxis();
+		//}
+		//m_renderTarget.End(renderer);
 	}
 	virtual void OnPostRender(const float deltaSeconds) override {
 
@@ -67,14 +123,38 @@ public:
 	virtual void OnResizeEnd(const framework::eDockResize::Enum type, const sRectf &rect) override {
 
 	}
+
+	virtual void OnResetDevice() override
+	{
+		cRenderer &renderer = GetRenderer();
+
+		// update viewport
+		sRectf viewRect = { 0, 0, m_rect.Width() - 15, m_rect.Height() - 50 };
+		m_camera.SetViewPort(viewRect.Width(), viewRect.Height());
+
+		cViewport vp = GetRenderer().m_viewPort;
+		vp.m_vp.Width = viewRect.Width();
+		vp.m_vp.Height = viewRect.Height();
+		m_renderTarget.Create(renderer, vp, DXGI_FORMAT_R8G8B8A8_UNORM, true, true, DXGI_FORMAT_D24_UNORM_S8_UINT);
+	}
+
+	float m_incT = 0;
+	double m_incVal = 0;
+	graphic::cRenderTarget m_renderTarget;
 };
 
 
 
 
+class cDockView2 : public framework::cDockWindow
+{
+public:
+	cDockView2(const string &name) : framework::cDockWindow(name) {}
+	virtual ~cDockView2() {}
+};
+
 cViewer::cViewer()
 	: m_groundPlane1(Vector3(0, 1, 0), 0)
-	, m_terrainCamera("main cam")
 {
 	m_windowName = L"Debug Monitor";
 	//const RECT r = { 0, 0, 1024, 768 };
@@ -93,19 +173,15 @@ cViewer::~cViewer()
 
 bool cViewer::OnInit()
 {
-	DragAcceptFiles(m_hWnd, TRUE);
-
-	//cResourceManager::Get()->SetMediaDirectory("../media/");
-
-	const int WINSIZE_X = m_windowRect.right - m_windowRect.left;
-	const int WINSIZE_Y = m_windowRect.bottom - m_windowRect.top;
+	const float WINSIZE_X = float(m_windowRect.right - m_windowRect.left);
+	const float WINSIZE_Y = float(m_windowRect.bottom - m_windowRect.top);
 	GetMainCamera().SetCamera(Vector3(30, 30, -30), Vector3(0, 0, 0), Vector3(0, 1, 0));
 	GetMainCamera().SetProjection(MATH_PI / 4.f, (float)WINSIZE_X / (float)WINSIZE_Y, 0.1f, 10000.0f);
 	GetMainCamera().SetViewPort(WINSIZE_X, WINSIZE_Y);
 
-	m_terrainCamera.SetCamera(Vector3(-3, 10, -10), Vector3(0, 0, 0), Vector3(0, 1, 0));
-	m_terrainCamera.SetProjection(MATH_PI / 4.f, (float)WINSIZE_X / (float)WINSIZE_Y, 1.0f, 10000.f);
-	m_terrainCamera.SetViewPort(WINSIZE_X, WINSIZE_Y);
+	m_camera.SetCamera(Vector3(-3, 10, -10), Vector3(0, 0, 0), Vector3(0, 1, 0));
+	m_camera.SetProjection(MATH_PI / 4.f, (float)WINSIZE_X / (float)WINSIZE_Y, 1.0f, 10000.f);
+	m_camera.SetViewPort(WINSIZE_X, WINSIZE_Y);
 
 	GetMainLight().Init(cLight::LIGHT_DIRECTIONAL,
 		Vector4(0.2f, 0.2f, 0.2f, 1), Vector4(0.9f, 0.9f, 0.9f, 1),
@@ -115,29 +191,20 @@ bool cViewer::OnInit()
 	GetMainLight().SetPosition(lightPos);
 	GetMainLight().SetDirection((lightLookat - lightPos).Normal());
 
-	m_ground.Create(m_renderer, 10, 10, 1, eVertexType::POSITION | eVertexType::NORMAL | eVertexType::DIFFUSE | eVertexType::TEXTURE);
-	m_ground.m_primitiveType = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
-
-	m_mtrl.InitWhite();
-
-	cBoundingBox bbox2(Vector3(0, 0, 0), Vector3(10, 10, 10), Quaternion());
-	m_axis.Create(m_renderer);
-	m_axis.SetAxis(bbox2, false);
+	if (!m_dbgShmem.Init("MiningShmem"))
+		assert(0);
+	g_sharedData = (sSharedData*)m_dbgShmem.m_memPtr;
 
 	m_gui.SetContext();
 
 	cDockView1 *view1 = new cDockView1("DockView1");
 	view1->Create(eDockState::DOCKWINDOW, eDockSlot::TAB, this, NULL);
-	view1->Init();
+	view1->Init(m_renderer);
 
-	cDockView1 *view2 = new cDockView1("DockView2");
-	view2->Create(eDockState::DOCKWINDOW, eDockSlot::BOTTOM, this, view1);
-	view2->Init();
-
-	cDockView1 *view3 = new cDockView1("DockView3");
+	cDockView2 *view2 = new cDockView2("DockView2");
+	view2->Create(eDockState::DOCKWINDOW, eDockSlot::BOTTOM, this, view1, 0.2f);
+	cDockView2 *view3 = new cDockView2("DockView3");
 	view3->Create(eDockState::DOCKWINDOW, eDockSlot::RIGHT, this, view2);
-	view3->Init();
-
 
 	const int cx = GetSystemMetrics(SM_CXSCREEN);
 	const int cy = GetSystemMetrics(SM_CYSCREEN);
@@ -222,33 +289,16 @@ void cViewer::OnUpdate(const float deltaSeconds)
 {
 	__super::OnUpdate(deltaSeconds);
 
-	cAutoCam cam(&m_terrainCamera);
+	cAutoCam cam(&m_camera);
 
 	GetMainCamera().Update(deltaSeconds);
 }
-
-
-bool show_test_window = true;
-bool show_another_window = false;
-ImVec4 clear_col = ImColor(114, 144, 154);
 
 
 void cViewer::OnRender(const float deltaSeconds)
 {
 }
 
-//
-//void cViewer::OnLostDevice()
-//{
-//	m_renderer.ResetDevice(0, 0, true);
-//	m_terrainCamera.SetViewPort(m_renderer.m_viewPort.GetWidth(), m_renderer.m_viewPort.GetHeight());
-//}
-//
-//
-//void cViewer::OnShutdown()
-//{
-//}
-//
 
 void cViewer::OnEventProc(const sf::Event &evt)
 {

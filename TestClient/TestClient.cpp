@@ -13,7 +13,7 @@ int main()
 
 	struct sSharedData
 	{
-		int state; // 0:readable,writable , 1:write, 2:write-end, 3:read
+		//int state; // 0:readable,writable , 1:write, 2:write-end, 3:read
 		double dtVal;
 		char dummy[256];
 	};
@@ -27,9 +27,9 @@ int main()
 		//while ((1 == sharedData->state) || (3 == sharedData->state))
 		//	Sleep(1);
 		mutex.Lock();
-		sharedData->state = 1;
+		//sharedData->state = 1;
 		sharedData->dtVal = cos(phase);
-		sharedData->state = 2;
+		//sharedData->state = 2;
 		mutex.Unlock();
 
 		phase += 0.1f;

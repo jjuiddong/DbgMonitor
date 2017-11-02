@@ -1,7 +1,6 @@
 //
 // Debug Monitor
 //
-
 #include "stdafx.h"
 
 using namespace graphic;
@@ -9,13 +8,19 @@ using namespace framework;
 
 struct sSharedData 
 {
-	int state; // 0:readable,writable , 1:write, 2:write-end, 3:read
+	// output
+	float fps;
 	double dtVal;
+
+	// input
+	bool isDbgRender;
+	int dbgRenderStyle;
+
 	char dummy[256];
 };
 sSharedData *g_sharedData = NULL;
 cShmmem m_dbgShmem;
-
+cMutex g_mutex("DebugMonitorMutex::jjuiddong");
 
 class cViewer : public framework::cGameMain2
 {
@@ -41,12 +46,12 @@ public:
 INIT_FRAMEWORK3(cViewer);
 
 
+//-------------------------------------------------------------------------------------------
 class cDockView1 : public framework::cDockWindow
 {
 public:
 	cDockView1(const string &name) : framework::cDockWindow(name)
-	, m_incT(0) 
-	, m_mutex("DbgMutex") {
+	, m_incT(0) {
 	}
 	virtual ~cDockView1() {
 	}
@@ -77,6 +82,8 @@ public:
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 
 		m_incT += deltaSeconds;
+
+		ImGui::Checkbox("LazyMode", &g_application->m_isLazyMode);
 	 
 		static bool animate = true;
 		ImGui::Checkbox("animate", &animate);
@@ -92,14 +99,15 @@ public:
 				//while (1 == g_sharedData->state)
 				//	Sleep(1);
 
-				m_mutex.Lock();
-				const double val = g_sharedData->dtVal;
-				m_mutex.Unlock();
-				m_incVal += val;
+				g_mutex.Lock();
+				const double fps = g_sharedData->fps;
+				const double dt = g_sharedData->dtVal;
+				g_mutex.Unlock();
+				m_incVal += dt;
 
 				m_incT = 0;
 				values1[values_offset] = (float)m_incVal;
-				values2[values_offset] = (float)val;
+				values2[values_offset] = (float)fps;
 				values_offset = (values_offset + 1) % ARRAYSIZE(values1);
 
 				if (m_incVal > 1.0f)
@@ -118,9 +126,9 @@ public:
 		ImGui::Spacing();
 		ImGui::Text("Delta Seconds");
 		ImGui::SameLine();
-		static float graph2MinMax[2] = { -1.2f, 1.2f };
+		static float graph2MinMax[2] = { -1.2f, 1000.2f };
 		ImGui::DragFloat2("Graph2 Min-Max", graph2MinMax, 0.01f);
-		ImGui::PlotLines("dt", values2, ARRAYSIZE(values2), values_offset, ""
+		ImGui::PlotLines("fps", values2, ARRAYSIZE(values2), values_offset, ""
 			, graph2MinMax[0], graph2MinMax[1], ImVec2(0, 250));
 	}
 
@@ -157,24 +165,45 @@ public:
 
 	float m_incT = 0;
 	double m_incVal = 0;
-	cMutex m_mutex;
 	graphic::cRenderTarget m_renderTarget;
 };
 
 
 
-
+//-------------------------------------------------------------------------------------------
 class cDockView2 : public framework::cDockWindow
 {
 public:
 	cDockView2(const string &name) : framework::cDockWindow(name) {}
 	virtual ~cDockView2() {}
+
+	virtual void OnRender(const float deltaSeconds) override {
+
+		g_mutex.Lock();
+		ImGui::Checkbox("Debug Render", &g_sharedData->isDbgRender);
+		char *styles = "Sphere\0Box\0None\0";
+		ImGui::Combo("Debug Render Style", &g_sharedData->dbgRenderStyle, styles);
+		g_mutex.Unlock();
+
+	}
 };
+
+
+//-------------------------------------------------------------------------------------------
+class cDockView3 : public framework::cDockWindow
+{
+public:
+	cDockView3(const string &name) : framework::cDockWindow(name) {}
+	virtual ~cDockView3() {}
+};
+
 
 cViewer::cViewer()
 	: m_groundPlane1(Vector3(0, 1, 0), 0)
 {
 	m_windowName = L"Debug Monitor";
+	m_isLazyMode = true;
+
 	//const RECT r = { 0, 0, 1024, 768 };
 	const RECT r = { 0, 0, 1280, 1024 };
 	m_windowRect = r;
@@ -215,13 +244,13 @@ bool cViewer::OnInit()
 
 	m_gui.SetContext();
 
-	cDockView1 *view1 = new cDockView1("DockView1");
+	cDockView1 *view1 = new cDockView1("Graph View");
 	view1->Create(eDockState::DOCKWINDOW, eDockSlot::TAB, this, NULL);
 	view1->Init(m_renderer);
 
-	cDockView2 *view2 = new cDockView2("DockView2");
-	view2->Create(eDockState::DOCKWINDOW, eDockSlot::BOTTOM, this, view1, 0.2f);
-	cDockView2 *view3 = new cDockView2("DockView3");
+	cDockView2 *view2 = new cDockView2("Flags");
+	view2->Create(eDockState::DOCKWINDOW, eDockSlot::BOTTOM, this, view1, 0.4f);
+	cDockView3 *view3 = new cDockView3("DockView3");
 	view3->Create(eDockState::DOCKWINDOW, eDockSlot::RIGHT, this, view2);
 
 	const int cx = GetSystemMetrics(SM_CXSCREEN);
@@ -233,13 +262,19 @@ bool cViewer::OnInit()
 	float col_main_sat = 0.0f / 255.0f;
 	float col_main_val = 80.0f / 255.0f;
 
+	//float col_area_hue = 0.0f / 255.0f;
+	//float col_area_sat = 0.0f / 255.0f;
+	//float col_area_val = 50.0f / 255.0f;
 	float col_area_hue = 0.0f / 255.0f;
-	float col_area_sat = 0.0f / 255.0f;
-	float col_area_val = 50.0f / 255.0f;
+	float col_area_sat = 30.0f / 255.0f;
+	float col_area_val = 45.0f / 255.0f;
 
+	//float col_back_hue = 0.0f / 255.0f;
+	//float col_back_sat = 0.0f / 255.0f;
+	//float col_back_val = 35.0f / 255.0f;
 	float col_back_hue = 0.0f / 255.0f;
-	float col_back_sat = 0.0f / 255.0f;
-	float col_back_val = 35.0f / 255.0f;
+	float col_back_sat = 30.0f / 255.0f;
+	float col_back_val = 25.0f / 255.0f;
 
 	float col_text_hue = 0.0f / 255.0f;
 	float col_text_sat = 0.0f / 255.0f;

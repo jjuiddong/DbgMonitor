@@ -6,22 +6,6 @@
 using namespace graphic;
 using namespace framework;
 
-struct sSharedData 
-{
-	// output
-	float fps;
-	double dtVal;
-
-	// input
-	bool isDbgRender;
-	int dbgRenderStyle;
-
-	char dummy[256];
-};
-sSharedData *g_sharedData = NULL;
-cShmmem m_dbgShmem;
-cMutex g_mutex("DebugMonitorMutex::jjuiddong");
-
 class cViewer : public framework::cGameMain2
 {
 public:
@@ -35,6 +19,7 @@ public:
 
 
 public:
+	cDbgMonitor m_dbgMonitor;
 	sf::Vector2i m_curPos;
 	Plane m_groundPlane1, m_groundPlane2;
 	float m_moveLen;
@@ -69,7 +54,6 @@ public:
 		m_renderTarget.Create(renderer, vp, DXGI_FORMAT_R8G8B8A8_UNORM, true, true
 			, DXGI_FORMAT_D24_UNORM_S8_UINT);
 
-
 		return true;
 	}
 	
@@ -99,10 +83,11 @@ public:
 				//while (1 == g_sharedData->state)
 				//	Sleep(1);
 
-				g_mutex.Lock();
-				const double fps = g_sharedData->fps;
-				const double dt = g_sharedData->dtVal;
-				g_mutex.Unlock();
+				cDbgMonitor &dbgMonitor = ((cViewer*)g_application)->m_dbgMonitor;
+				dbgMonitor.m_mutex.Lock();
+				const double fps = dbgMonitor.m_sharedData->fps;
+				const double dt = dbgMonitor.m_sharedData->dtVal;
+				dbgMonitor.m_mutex.Unlock();
 				m_incVal += dt;
 
 				m_incT = 0;
@@ -179,12 +164,13 @@ public:
 
 	virtual void OnRender(const float deltaSeconds) override {
 
-		g_mutex.Lock();
-		ImGui::Checkbox("Debug Render", &g_sharedData->isDbgRender);
+		cDbgMonitor &dbgMonitor = ((cViewer*)g_application)->m_dbgMonitor;
+		dbgMonitor.m_mutex.Lock();
+		ImGui::Checkbox("Debug Render", &dbgMonitor.m_sharedData->isDbgRender);
 		char *styles = "Sphere\0Box\0None\0";
-		ImGui::Combo("Debug Render Style", &g_sharedData->dbgRenderStyle, styles);
-		g_mutex.Unlock();
-
+		ImGui::Combo("Debug Render Style", &dbgMonitor.m_sharedData->dbgRenderStyle, styles);
+		ImGui::InputFloat3("mousePos", (float*)&dbgMonitor.m_sharedData->mousePos, -1, ImGuiInputTextFlags_ReadOnly);
+		dbgMonitor.m_mutex.Unlock();
 	}
 };
 
@@ -204,8 +190,8 @@ cViewer::cViewer()
 	m_windowName = L"Debug Monitor";
 	m_isLazyMode = true;
 
-	//const RECT r = { 0, 0, 1024, 768 };
-	const RECT r = { 0, 0, 1280, 1024 };
+	const RECT r = { 0, 0, 1024, 768 };
+	//const RECT r = { 0, 0, 1280, 1024 };
 	m_windowRect = r;
 	m_moveLen = 0;
 	m_LButtonDown = false;
@@ -238,9 +224,9 @@ bool cViewer::OnInit()
 	GetMainLight().SetPosition(lightPos);
 	GetMainLight().SetDirection((lightLookat - lightPos).Normal());
 
-	if (!m_dbgShmem.Init("MiningShmem"))
+	if (!m_dbgMonitor.Create(m_renderer, "DebugMonitorShmem::jjuiddong"))
 		assert(0);
-	g_sharedData = (sSharedData*)m_dbgShmem.m_memPtr;
+	//g_sharedData = (sSharedData*)m_dbgShmem.m_memPtr;
 
 	m_gui.SetContext();
 

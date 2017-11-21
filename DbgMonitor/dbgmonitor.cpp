@@ -169,7 +169,6 @@ public:
 		ImGui::Checkbox("Debug Render", &dbgMonitor.m_sharedData->isDbgRender);
 		char *styles = "Sphere\0Box\0None\0";
 		ImGui::Combo("Debug Render Style", &dbgMonitor.m_sharedData->dbgRenderStyle, styles);
-		ImGui::InputFloat3("mousePos", (float*)&dbgMonitor.m_sharedData->mousePos, -1, ImGuiInputTextFlags_ReadOnly);
 		dbgMonitor.m_mutex.Unlock();
 	}
 };
@@ -181,6 +180,24 @@ class cDockView3 : public framework::cDockWindow
 public:
 	cDockView3(const string &name) : framework::cDockWindow(name) {}
 	virtual ~cDockView3() {}
+
+	virtual void OnRender(const float deltaSeconds) override {
+
+		cDbgMonitor &dbgMonitor = ((cViewer*)g_application)->m_dbgMonitor;
+		dbgMonitor.m_mutex.Lock();
+		ImGui::InputFloat3("eyePos", (float*)&dbgMonitor.m_sharedData->eyePos, -1, ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputFloat3("lookPos", (float*)&dbgMonitor.m_sharedData->lookPos, -1, ImGuiInputTextFlags_ReadOnly);
+		Vector3 dir = (dbgMonitor.m_sharedData->lookPos - dbgMonitor.m_sharedData->eyePos).Normal();
+		ImGui::InputFloat3("dir", (float*)&dir, -1, ImGuiInputTextFlags_ReadOnly);
+
+		ImGui::InputFloat3("lookPos", (float*)&dbgMonitor.m_sharedData->lookPos, -1, ImGuiInputTextFlags_ReadOnly);
+		ImGui::Spacing();
+		ImGui::InputFloat3("eyePos2D", (float*)&dbgMonitor.m_sharedData->eyePos2D, -1, ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputFloat3("lookPos2D", (float*)&dbgMonitor.m_sharedData->lookPos2D, -1, ImGuiInputTextFlags_ReadOnly);
+		ImGui::Spacing();
+		ImGui::InputFloat3("mousePos", (float*)&dbgMonitor.m_sharedData->mousePos, -1, ImGuiInputTextFlags_ReadOnly);
+		dbgMonitor.m_mutex.Unlock();
+	}
 };
 
 
@@ -236,7 +253,7 @@ bool cViewer::OnInit()
 
 	cDockView2 *view2 = new cDockView2("Flags");
 	view2->Create(eDockState::DOCKWINDOW, eDockSlot::BOTTOM, this, view1, 0.4f);
-	cDockView3 *view3 = new cDockView3("DockView3");
+	cDockView3 *view3 = new cDockView3("Variable");
 	view3->Create(eDockState::DOCKWINDOW, eDockSlot::RIGHT, this, view2);
 
 	const int cx = GetSystemMetrics(SM_CXSCREEN);

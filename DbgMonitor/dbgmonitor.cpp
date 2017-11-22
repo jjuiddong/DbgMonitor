@@ -190,7 +190,6 @@ public:
 		Vector3 dir = (dbgMonitor.m_sharedData->lookPos - dbgMonitor.m_sharedData->eyePos).Normal();
 		ImGui::InputFloat3("dir", (float*)&dir, -1, ImGuiInputTextFlags_ReadOnly);
 
-		ImGui::InputFloat3("lookPos", (float*)&dbgMonitor.m_sharedData->lookPos, -1, ImGuiInputTextFlags_ReadOnly);
 		ImGui::Spacing();
 		ImGui::InputFloat3("eyePos2D", (float*)&dbgMonitor.m_sharedData->eyePos2D, -1, ImGuiInputTextFlags_ReadOnly);
 		ImGui::InputFloat3("lookPos2D", (float*)&dbgMonitor.m_sharedData->lookPos2D, -1, ImGuiInputTextFlags_ReadOnly);

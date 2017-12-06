@@ -200,6 +200,69 @@ public:
 };
 
 
+//-------------------------------------------------------------------------------------------
+class cDockView4 : public framework::cDockWindow
+{
+public:
+	cDockView4(const string &name) : framework::cDockWindow(name) {}
+	virtual ~cDockView4() {}
+
+	virtual void OnRender(const float deltaSeconds) override {
+
+		cDbgMonitor &dbgMonitor = ((cViewer*)g_application)->m_dbgMonitor;
+		dbgMonitor.m_mutex.Lock();
+		//ImGui::LabelText("label", "Value");
+
+		int actualDrawCall = 0;
+		ImGui::InputInt("Draw Call", &dbgMonitor.m_sharedData->drawCallCount, -1, ImGuiInputTextFlags_ReadOnly);
+		for (int i = 0; i < 10; ++i)
+		{
+			const int vtxType = dbgMonitor.m_sharedData->shaderDrawCall[0][i];
+			const int drawCallCnt = dbgMonitor.m_sharedData->shaderDrawCall[1][i];
+			if (0 == drawCallCnt)
+				continue;
+
+			if (0 != vtxType)
+				actualDrawCall += drawCallCnt;
+
+			Str128 strVtxType;
+			GetVtxTypeStr(vtxType, strVtxType);
+			ImGui::Text("%s : %d", strVtxType.c_str(), drawCallCnt);
+		}
+		ImGui::InputInt("Actual Draw Call", &actualDrawCall, -1, ImGuiInputTextFlags_ReadOnly);
+
+		dbgMonitor.m_mutex.Unlock();
+	}
+
+	void GetVtxTypeStr(const int vtxType, OUT Str128 &out)
+	{
+		if (vtxType & eVertexType::POSITION)
+			out += "Pos ";
+		if (vtxType & eVertexType::POSITION_RHW)
+			out += "Pos_Rhw ";
+		if (vtxType & eVertexType::NORMAL)
+			out += "Norm ";
+		if (vtxType & eVertexType::TEXTURE)
+			out += "Tex ";
+		if (vtxType & eVertexType::COLOR)
+			out += "Color ";
+		if (vtxType & eVertexType::TANGENT)
+			out += "Tangent ";
+		if (vtxType & eVertexType::BINORMAL)
+			out += "Binorm ";
+		if (vtxType & eVertexType::BLENDINDICES)
+			out += "BlendIndices ";
+		if (vtxType & eVertexType::BLENDWEIGHT)
+			out += "BlendWeight ";
+		if (out.empty())
+			out.Format("None %d", vtxType);
+	}
+
+};
+
+
+
+
 cViewer::cViewer()
 	: m_groundPlane1(Vector3(0, 1, 0), 0)
 {
@@ -254,6 +317,8 @@ bool cViewer::OnInit()
 	view2->Create(eDockState::DOCKWINDOW, eDockSlot::BOTTOM, this, view1, 0.4f);
 	cDockView3 *view3 = new cDockView3("Variable");
 	view3->Create(eDockState::DOCKWINDOW, eDockSlot::RIGHT, this, view2);
+	cDockView4 *view4 = new cDockView4("Graphic");
+	view4->Create(eDockState::DOCKWINDOW, eDockSlot::TAB, this, view3);
 
 	const int cx = GetSystemMetrics(SM_CXSCREEN);
 	const int cy = GetSystemMetrics(SM_CYSCREEN);

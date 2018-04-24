@@ -286,3 +286,5 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+DbgMonitor/log.txt
+DbgMonitor/errlog.txt

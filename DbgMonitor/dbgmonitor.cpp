@@ -242,7 +242,7 @@ public:
 			out += "Pos_Rhw ";
 		if (vtxType & eVertexType::NORMAL)
 			out += "Norm ";
-		if (vtxType & eVertexType::TEXTURE)
+		if (vtxType & eVertexType::TEXTURE0)
 			out += "Tex ";
 		if (vtxType & eVertexType::COLOR)
 			out += "Color ";
